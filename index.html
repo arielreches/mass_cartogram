@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Cartograms with d3 &amp; TopoJSON</title>
+    <meta charset="utf-8">
+    <meta property="og:image" content="placeholder.png">
+    <style type="text/css">
+
+      body {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; 
+        font-size: 14px;
+        line-height: 1.4em;
+        padding: 0;
+        margin: 0;
+        background-color: rgb(244, 245, 247)
+
+      }
+
+      #container {
+        width: 900px;
+        margin: 20px auto;
+
+      }
+
+      h1 {
+        font-size: 200%;
+        margin: 0 0 15px 0;
+      }
+
+      h2 {
+        font-size: 160%;
+        margin: 0 0 10px 0;
+      }
+
+      p {
+        margin: 0 0 10px;
+      }
+
+      form, form > * {
+        margin: 0;
+      }
+
+
+.axis text {
+  font: 10px sans-serif;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.bar {
+  fill: steelblue;
+  fill-opacity: .9;
+}
+
+#bar{
+  z-index: 3;
+  margin: -20px;
+  width: 10000px;
+
+
+
+}
+
+.x.axis path {
+  display: none;
+}
+
+
+
+      #status {
+        color: #999;
+      }
+
+      #map-container {
+        height: 650px;
+        text-align: center;
+        position: relative;
+        margin-top: -150px;
+                z-index: 0;
+
+
+        /*margin: 20px 0;*/
+
+      }
+
+      #map {
+        display: block;
+        position: absolute;
+        background: #fff;
+        width: 100%;
+         height: 600px;
+        margin: 40px;
+        padding:0px;
+            background:rgba(0,0,0,0.0);
+
+
+      }
+
+      path.state {
+        stroke: #666;
+        stroke-width: .5;
+      }
+
+      path.state:hover {
+        stroke: #000;
+      }
+
+      form {
+        font-size: 120%;
+      }
+
+      select {
+        font-size: inherit;
+      }
+
+      #placeholder {
+        position: absolute;
+        z-index: -1;
+        display: block;
+        left: 0;
+        top: 0;
+      }
+
+      #tooltip {   
+        z-index: 1;
+    position: absolute;           
+    text-align: center;
+    padding: 20px;             
+    margin: 10px;
+    font: 12px sans-serif;        
+    background: lightsteelblue;   
+    border: 1px;      
+    border-radius: 2px;           
+    pointer-events: none;         
+  }
+  #tooltip h4{
+    margin:0;
+    font-size:14px;
+  }
+  #tooltip{
+    background:rgba(0,0,0,0.7);
+    border:1px solid grey;
+    border-radius:5px;
+    font-size:12px;
+    width:145px;
+    height:250px;
+
+    padding:4px;
+    color:white;
+    opacity:0;
+  }
+  #tooltip table{
+    table-layout:fixed;
+  }
+  #tooltip tr td{
+    padding:0;
+    margin:0;
+  }
+  #tooltip tr td:nth-child(1){
+  }
+  #tooltip tr td:nth-child(2){
+    text-align:center;
+  }
+  .tooltip2 {
+  position: absolute;
+    padding: 5px;             
+    margin: 4px;
+    font: 10px sans-serif;    
+       color:black;
+
+  width: 200px;
+  height: 28px;
+  pointer-events: none;
+}
+  #legend{
+    z-index: 5;
+    width:100%;
+  }
+     
+
+    </style><link rel="stylesheet" href="gh-fork-ribbon.css" />
+  </head>
+  <body>
+
+    <div id="container">
+      <h1>Massachusetts Cartogram</h1>
+      <form>
+        <p>
+          <label>Scale by <select id="field"></select></label>
+          <label>Color by <select id="field2"></select></label>
+          <span id="status"></span>
+        </p>
+      </form>
+      <svg id="legend"></svg>
+      <div id="map-container">
+      <div id="tooltip"></div><!-- div to hold tooltip. -->
+        <svg id="map"></svg>
+      </div>
+            <div id="bar"></div>
+
+      <!-- <div id="about">
+        <h2>About</h2>
+        <p>Rewrite of <a href="http://stamen.com/studio/shawn">Shawn Allen's</a> cartogram demo but with Massachusetts towns, currently very slow.</p>
+      </div> -->
+
+    </div>
+     <script src="d3.v3.min.js"></script>
+     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/1.13.0/d3-legend.min.js"> </script>
+    <script src="lib/colorbrewer.js"></script>
+    <script src="lib/topojson.js"></script>
+    <script src="cartogram.js"></script>
+    <script>
+      // hide the form if the browser doesn't do SVG,
+      // (then just let everything else fail)
+      if (!document.createElementNS) {
+        document.getElementsByTagName("form")[0].style.display = "none";
+      }
+
+ 
+
+   // "<h4>" + dataById[d.id].name + " " + (field2).name + " " + value2(d)+"</h4>")
+   //      // .style("left", (d3.event.pageX - 100) + "px")     
+   //      // .style("top", (d3.event.pageY - 100) + "px");
+   //      .style("left", (800) + "px")     
+   //      .style("top", (50) + "px");
+
+
+
+var margin = {top: 20, right: 20, bottom: 30, left: 50},
+    width = 960 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom;
+ 
+
+
+// setup fill color
+// var cValue = function(d) { return d.Manufacturer;},
+//     color = d3.scale.category10();
+
+// add the graph canvas to the body of the webpage
+var bar_svg = d3.select("#bar").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+// add the tooltip area to the webpage
+var tooltip2 = d3.select("#bar").append("div")
+    .attr("class", "tooltip2")
+    .style("opacity", 0);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// var margin = {top: 20, right: 20, bottom: 30, left: 40},
+//     width = 1200 - margin.left - margin.right,
+//     height = 500 - margin.top - margin.bottom;
+
+// var formatPercent = d3.format(".0%");
+
+// var x = d3.scale.ordinal()
+//     .rangeRoundBands([0, width], .1, 1);
+
+// var y = d3.scale.linear()
+//     .range([height, 0]);
+
+// var xAxis = d3.svg.axis()
+//     .scale(x)
+//     .orient("bottom");
+
+// var yAxis = d3.svg.axis()
+//     .scale(y)
+//     .orient("left")
+
+// var bar_svg = d3.select("#bar").append("svg")
+//     .attr("width", width + margin.left + margin.right)
+//     .attr("height", height + margin.top + margin.bottom)
+
+//   .append("g")
+//     .style("z-index", "2")
+
+//     .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+
+
+
+
+var fmt = d3.format(",.2f"),
+          fields = [
+            {name: "Area (sq km)", id: "area"},
+            {name: "Population", id:"p0p"},
+            {name: "Dunkin Donuts", id: "dunks"},
+            {name: "Starbucks", id: "starbucks"},
+            {name: "Clinton 2016(%)", id: "clinton"},
+            {name: "Trump 2016(%)", id: "trump"},
+            {name: "Bachelor Degree(%)", id: "edu"},
+            {name: "Median Income($)", id: "inc"},
+            {name: "Children5-14(%)", id: "child"},
+            {name: "Old 75+(%)", id: "old"},
+            {name: "Median Age", id: "age"}
+
+
+
+
+
+
+          ],
+          fields2 = [
+             {name: "Area (sq km)", id: "area"},
+            {name: "Population", id:"p0p"},
+            {name: "Dunkin Donuts", id: "dunks"},
+            {name: "Starbucks", id: "starbucks"},
+            {name: "Clinton 2016(%)", id: "clinton"},
+            {name: "Trump 2016(%)", id: "trump"},
+            {name: "Bachelor Degree(%)", id: "edu"},
+            {name: "Median Income($)", id: "inc"},
+            {name: "Children5-14(%)", id: "child"},
+            {name: "Old 75+(%)", id: "old"},
+            {name: "Median Age", id: "age"}
+
+
+
+          ]
+          fieldsById = d3.nest()
+            .key(function(d) { return d.id; })
+            .rollup(function(d) { return d[0]; })
+            .map(fields),
+          field = fields[0],
+          field2 = fields2[1],
+          colors = colorbrewer.RdYlBu[3]
+            .reverse()
+            .map(function(rgb) { 
+              return d3.hsl(rgb).toString(); });
+
+
+
+      var body = d3.select("body"),
+          stat = d3.select("#status");
+
+      var fieldSelect = d3.select("#field")
+        .on("change", function(e) {
+          field = fields[this.selectedIndex];
+          location.hash = "#" + [field.id, field2.id].join("/");
+        });
+
+      
+      var field2Select = d3.select("#field2")
+        .on("change", function(e) {
+          field2 = fields2[this.selectedIndex]
+          console.log("problem?", field2.id)
+         z =  fields2[this.selectedIndex];
+          location.hash = "#" + [field.id, field2.id].join("/");
+        });
+
+      fieldSelect.selectAll("option")
+        .data(fields)
+        .enter()
+        .append("option")
+          .attr("value", function(d) { return d.id; })
+          .text(function(d) { return d.name; });
+
+
+      field2Select.selectAll("option")
+        .data(fields2)
+        .enter()
+        .append("option")
+          .attr("value", function(y) { return y.id; })
+          .text(function(y) { return y.name; });
+      
+
+      var map = d3.select("#map"),
+          layer = map.append("g")
+            .attr("id", "layer"),
+          states = layer.append("g")
+            .attr("id", "states")
+            .selectAll("path");
+
+      // map.call(zoom);
+
+      var 
+          topology,
+          geometries,
+          dataById=[],
+          carto = d3.cartogram()
+            .properties(function(d) {
+              return dataById[d.properties.id];
+            })
+            .value(function(d) {
+              return +dataById[d.properties.id[field]];
+            });
+
+      window.onhashchange = function() {
+        parseHash();
+      };
+
+
+      d3.json("data/ma.json", function(topo) {
+          
+        topology = topo;
+        geometries = topology.objects.towns.geometries;
+        d3.json("data/demo2.json", function(data) {
+          dataById = data;
+          init();
+      });
+});
+      function init() {
+
+
+     var features = carto.features(topology, geometries),
+            path = d3.geo.path()
+              .projection(null);
+
+
+
+
+
+
+ var  xValue = function(d) {return d.properties[field.id];}, // data -> value
+    xScale = d3.scale.linear().range([0, width]), // value -> display
+    // xScale = d3.scale.log().base(2).range([0, width]) // value -> display
+    xMap = function(d) { 
+    return xScale(xValue(d));}, // data -> display
+    xAxis = d3.svg.axis().scale(xScale).orient("bottom");
+ 
+
+// setup y
+var yValue = function(d) {return d.properties[field2.id];}, // data -> value
+    yScale = d3.scale.linear().range([height, 0]), // value -> display
+        // yScale = d3.scale.log().base(2).range([0, height]) // value -> display
+
+    yMap = function(d) { return yScale(yValue(d));}, // data -> display
+    yAxis = d3.svg.axis().scale(yScale).orient("left");
+
+
+
+
+ xScale.domain([d3.min(features, xValue)-1, d3.max(features, xValue)+1]);
+  yScale.domain([d3.max(features, yValue)+1, d3.min(features, yValue)-1]);
+    
+
+  bar_svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis)
+    .append("text")
+      .attr("class", "label")
+      .attr("x", width)
+      .attr("y", -6)
+      .style("text-anchor", "end")
+      .text("Calories");
+
+  // y-axis
+  bar_svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+    .append("text")
+      .attr("class", "label")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 6)
+      .attr("dy", ".71em")
+      .style("text-anchor", "end")
+      .text("Protein (g)");
+
+  // draw dots
+  bar_svg.selectAll(".dot")
+      .data(features)
+      .enter().append("circle")
+      .attr("class", "dot")
+      .attr("r", 3.5)
+      .attr("cx", xMap)
+      .attr("cy", yMap)
+      .style("fill", function(d) { 
+        return "red";}) 
+      .on("mouseover", function(d) {
+        console.log(d)
+          tooltip2.transition()
+               .duration(200)
+               .style("opacity", .9);
+          tooltip2.html(d['properties']['name']
+           + "<br/> (" + d['properties'][field.id]
+          + ", " + d['properties'][field2.id] + ")"
+          )
+               .style("left", 1000 + "px")
+               .style("top", (d3.event.pageY - 50) + "px");
+      })
+      .on("mouseout2", function(d) {
+          tooltip.transition()
+               .duration(500)
+               .style("opacity", 0);
+      });
+
+
+
+
+
+
+
+
+
+//   x.domain(features.map(function(d) {return d.properties.name; }));
+//   y.domain([0, d3.max(features, function(d) { return d.properties[field2.id]; })]);
+
+//   bar_svg.append("g")
+//       .attr("class", "x axis")
+//       .attr("transform", "translate(0," + height + ")")
+//       .call(xAxis);
+
+//   bar_svg.append("g")
+//       .attr("class", "y axis")
+//       .call(yAxis)
+//     .append("text")
+//       .attr("transform", "rotate(-90)")
+//       .attr("y", 6)
+//       .attr("dy", ".71em")
+//       .style("text-anchor", "end")
+//       .text("Frequency");
+
+
+
+// bar_svg.selectAll(".bar")
+//       .data(features)
+//     .enter().append("rect")
+//       .attr("class", "bar")
+//       .attr("x", function(d) { 
+//         return x(d.properties.name); })
+//       .attr("width", x.rangeBand())
+//       .attr("y", function(d) { return y(d.properties[field2.id]); })
+//       .attr("height", function(d) { return height - y(d.properties[field2.id]); });
+
+
+
+
+
+
+
+
+
+
+
+
+
+        states = states.data(features)
+          .enter()
+          .append("path")
+            .attr("class", "state")
+            .attr("id", function(d) {
+              return d.id;
+            })
+            .attr("fill", "#fafafa")
+            .attr("d", path);
+
+        states.append("title");
+
+
+        parseHash();
+      }
+
+
+
+
+
+
+
+
+
+
+
+
+      function update() {
+
+        var start = Date.now();
+        body.classed("updating", true);
+
+        var key2 = field2.id,
+        x = console.log("key2", key2)
+         value2 = function(d){
+
+            if(d.id){
+
+             return +dataById[d.id][key2];
+            }else{
+              return +d.properties[key2];
+            }
+        }
+
+        var key = field.id,
+            value = function(d) {
+
+            if(d.id){
+
+             return +dataById[d.id][key];
+            }else{
+              return +d.properties[key];
+            }
+            },
+        
+
+
+            values = states.data()
+              .map(value)
+              .filter(function(n) {
+                return !isNaN(n);
+              })
+              .sort(d3.ascending),
+            lo = values[0],
+            hi = values[values.length - 1];
+          
+          values2 = states.data()
+          .map(value2).filter(function(n) {
+                return !isNaN(n);
+              })
+              .sort(d3.ascending),
+            lo2 = values2[0],
+            hi2 = values2[values2.length - 1];
+
+
+        var color = d3.scale.linear()
+          .range(colors)
+          .domain(lo2 < 0
+            ? [lo2, 0, hi2]
+            : [lo2, d3.mean(values2), hi2]);
+
+        // normalize the scale to positive numbers
+        var scale = d3.scale.linear()
+          .domain([lo, hi])
+          .range([1, 1000]);
+
+
+
+
+ function round(n){
+  roundn = Math.pow(10, Math.round(Math.log10( d3.mean(values2))))
+  return parseInt(((Math.round(n/roundn))))
+ }
+
+ var legendDemo =  function() {
+
+if(field2.id === 'p0p' || field2.id === 'area' || field2.id === 'inc'){
+  var linear = d3.scale.linear()
+   .domain(lo2 < 0
+            ? [round(lo2), 0, round(hi2)]
+            : [round(lo2), round(d3.mean(values2)), round(hi2)])
+  .range(colors);
+}
+else{
+var linear = d3.scale.linear()
+   .domain(lo2 < 0
+            ? [(lo2), 0, (hi2)]
+            : [(lo2), (d3.mean(values2)), (hi2)])
+  .range(colors);
+}
+
+
+
+
+var svg = d3.select("#legend");
+
+svg.append("g")
+  .attr("class", "legendLinear")
+  .attr("transform", "translate(20,20)")
+ 
+if(field2.id === 'p0p' || field2.id === 'area' || field2.id === 'inc'){var legendLinear = d3.legend.color()
+.title("Legend for " + field2.name +  " (by " + Math.pow(10,  Math.round(Math.log10( d3.mean(values2)))     ) + ")") .shapeWidth(75)
+  .cells(7)
+  .orient('horizontal')
+    .labelFormat(d3.format(".2f"))
+  .scale(linear);
+
+}
+else{
+var legendLinear = d3.legend.color()
+.title("Legend for " + field2.name) .shapeWidth(75)
+  .cells(7)
+  .orient('horizontal')
+    .labelFormat(d3.format(".2f"))
+  .scale(linear);
+
+}
+
+ 
+svg.select(".legendLinear")
+  .call(legendLinear);
+        
+        }()
+
+
+        // tell the cartogram to use the scaled values
+        carto.value(function(d) {
+          return scale(value(d));
+        });
+
+
+ var  xValue = function(d) {return value(d);}, // data -> value
+    xScale = d3.scale.linear().range([0, width]), // value -> display
+    // xScale = d3.scale.log().base(2).range([0, width]) // value -> display
+    xMap = function(d) { 
+    return xScale(xValue(d));}, // data -> display
+    xAxis = d3.svg.axis().scale(xScale).orient("bottom");
+ 
+
+// setup y
+var yValue = function(d) { return value2(d);}, // data -> value
+    yScale = d3.scale.linear().range([height, 0]), // value -> display
+        // yScale = d3.scale.log().base(2).range([0, height]) // value -> display
+
+    yMap = function(d) { return yScale(yValue(d));}, // data -> display
+    yAxis = d3.svg.axis().scale(yScale).orient("left");
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function drawBars(features){
+
+
+ xScale.domain([d3.min(features, xValue)-1, d3.max(features, xValue)+1]);
+ yScale.domain([d3.max(features, yValue)+1, d3.min(features, yValue)-1]);
+    
+  var bar_svg = d3.select("#bar").transition();
+
+
+  bar_svg.select(" .y.axis")
+      // .duration(750)
+      .call(yAxis)
+      .attr("d", features)
+      .select(".label")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 6)
+      .attr("dy", ".71em")
+      .style("text-anchor", "end")
+      .text(field2.name);
+
+
+        bar_svg.select(" .x.axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis)
+    .select(".label")
+      .attr("class", "label")
+      .attr("x", width)
+      .attr("y", -6)
+      .style("text-anchor", "end")
+      .text(field.name);
+
+  // draw dots
+  bar_svg.selectAll(".dot").attr("d", features)
+
+      .attr("r", 3.5)
+      .attr("cx", xMap)
+      .attr("cy", yMap)
+      .style("fill", function(d) { 
+        return color(value2(d));}) 
+
+
+
+// x.domain(features.map(function(d) { return dataById[d.id].name }));
+//   y.domain([0, d3.max(features, function(d) { return  value2(d) ;})]);
+
+//   bar_svg.append("g")
+//       .attr("class", "x axis")
+//       .attr("transform", "translate(0," + height + ")")
+//       .call(xAxis);
+
+//   bar_svg.append("g")
+//       .attr("class", "y axis")
+//       .call(yAxis)
+//     .append("text")
+//       .attr("transform", "rotate(-90)")
+//       .attr("y", 6)
+//       .attr("dy", ".71em")
+//       .style("text-anchor", "end")
+//       .text("Frequency");
+
+
+
+// bar_svg.selectAll(".bar")
+//       .data(features)
+//     .enter().append("rect")
+//       .attr("class", "bar")
+//       .attr("x", function(d) { 
+//         return x(dataById[d.id].name); })
+//       .attr("width", x.rangeBand())
+//       .attr("y", function(d) { return y(value2(d)); })
+//       .attr("height", function(d) { return height - y(value2(d)); });
+}
+
+  function mouseOver(d){
+
+
+ function tooltipHtml(d){
+    
+   
+    
+    var othercathtml = function(){
+       var otherfields = []
+      var f1 = field.id
+      var f2 = field2.id
+      var html = ""
+      // for(x in fields){
+      //   ofield = fields[x].id
+      //   if(ofield != f1 && ofield != f2)
+      //     otherfields.push(fields[x])
+      // }
+
+      for(x in fields){
+        tr = '<tr style=color:#b8ff7f;font-weight:bold >'
+        ofield = fields[x].id
+        if(ofield === f1 || ofield === f2){
+          html = html +  tr + "<td>"+fields[x].name + "</td><td>"+ dataById[d.id][fields[x].id]+"</td></tr>"
+        }
+        else{
+          html = html + "<tr> <td>"+fields[x].name + "</td><td>"+ dataById[d.id][fields[x].id]+"</td></tr>"
+        }
+
+
+
+      }
+      return html
+    }()
+   /* function to create html content string in tooltip div. */
+    return "<h4>"+dataById[d.id].name+"</h4><table>"+
+      othercathtml +
+      "</table>";
+  }
+
+
+
+      d3.select("#tooltip").transition().duration(200).style("opacity", .9);        
+      // d3.select("#tooltip").html("<h4>" + dataById[d.id].name + " " + (field2).name + " " + value2(d)+"</h4>")
+      d3.select("#tooltip").html(tooltipHtml(d))
+
+        // .style("left", (d3.event.pageX - 100) + "px")     
+        // .style("top", (d3.event.pageY - 100) + "px");
+        .style("left", (800) + "px")     
+        .style("top", (10) + "px");
+
+    }
+    
+    function mouseOut(){
+      d3.select("#tooltip").transition().duration(500).style("opacity", 0);      
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // generate the new features, pre-projected
+        carto(topology, geometries, function(features){
+          // console.log(features)
+
+        drawBars(features)
+
+        states.on("mouseover", mouseOver).on("mouseout", mouseOut);
+
+        // update the data
+        states.data(features)
+          .select("title")
+            // .text(function(d) {
+            //   return [dataById[d.id].name, fmt(value2(d))].join(": ");
+            // });
+
+        states.transition()
+          .duration(750)
+          .ease("linear")
+          .attr("fill", function(d) {
+            return color(value2(d, key));
+          })
+          .attr("d", carto.path);
+
+        var delta = (Date.now() - start) / 1000;
+        stat.text(["calculated in", delta.toFixed(1), "seconds"].join(" "));
+        body.classed("updating", false);
+        });
+      }
+
+
+
+
+
+
+
+
+
+
+
+
+
+      var deferredUpdate = (function() {
+        var timeout;
+        return function() {
+          var args = arguments;
+          clearTimeout(timeout);
+          stat.text("calculating...");
+          return timeout = setTimeout(function() {
+            update.apply(null, arguments);
+          }, 10);
+        };
+      })();
+
+      var hashish = d3.selectAll("a.hashish")
+        .datum(function() {
+          return this.href;
+        });
+
+      function parseHash() {
+        var parts = location.hash.substr(1).split("/"),
+            desiredFieldId = parts[0],
+            desiredField2 =  parts[1],
+
+
+
+        field = fieldsById[desiredFieldId] || fields[0];
+        field2 = fieldsById[desiredField2] || fields2[1];
+
+        // field2 = (fields2.indexOf(desiredField2) > -1) ? desiredStartYear : fields2[0];
+
+        fieldSelect.property("selectedIndex", fields.indexOf(field));
+        field2Select.property("selectedIndex",  fields.indexOf(field2));
+          deferredUpdate();
+          location.replace("#" + [field.id, field2.id].join("/"));
+
+          hashish.attr("href", function(href) {
+            return href + location.hash;
+          });
+        
+      }
+
+    </script>
+  </body>
+</html>
